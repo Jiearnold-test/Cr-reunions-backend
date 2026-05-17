@@ -4,6 +4,7 @@ const fetch = require('node-fetch');
 const multer = require('multer');
 const FormData = require('form-data');
 const { parseAndBuildDocx } = require('./generateDocx');
+const { Resend } = require('resend');
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -73,6 +74,31 @@ app.post('/docx', async (req, res) => {
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(buffer);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Route envoi e-mail avec DOCX en pièce jointe
+app.post('/send-email', async (req, res) => {
+  try {
+    const { crTexte, meta, destinataire } = req.body;
+    const buffer = await parseAndBuildDocx(crTexte, meta);
+    const filename = `CR_${(meta.titre || 'reunion').replace(/\s+/g, '_')}_${(meta.date || '').replace(/\s+/g, '_')}.docx`;
+
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    await resend.emails.send({
+      from: 'CR Réunions <onboarding@resend.dev>',
+      to: destinataire,
+      subject: `CR — ${meta.titre} — ${meta.date}`,
+      html: `<p>Bonjour,</p><p>Veuillez trouver ci-joint le compte-rendu de la réunion <strong>${meta.titre}</strong> du ${meta.date}.</p><p>Ce document a été généré automatiquement par l'application CR Réunions.</p>`,
+      attachments: [{
+        filename,
+        content: buffer.toString('base64'),
+      }]
+    });
+
+    res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
