@@ -3,6 +3,7 @@ const cors = require('cors');
 const fetch = require('node-fetch');
 const multer = require('multer');
 const FormData = require('form-data');
+const { parseAndBuildDocx } = require('./generateDocx');
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -62,6 +63,20 @@ app.post('/generate', async (req, res) => {
 });
 
 app.get('/', (req, res) => res.send('CR Réunions API — OK'));
+
+// Route génération DOCX
+app.post('/docx', async (req, res) => {
+  try {
+    const { crTexte, meta } = req.body;
+    const buffer = await parseAndBuildDocx(crTexte, meta);
+    const filename = `CR_${(meta.titre || 'reunion').replace(/\s+/g, '_')}_${(meta.date || '').replace(/\//g, '-')}.docx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Serveur démarré sur le port ${PORT}`));
